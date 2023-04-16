@@ -6,6 +6,7 @@ import PIL
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
 #from tkinter import*
 
 class VO_MainApplication:
@@ -60,10 +61,10 @@ class VO_MainApplication:
         #SOUS MENU EXTRACTION CONTOURS
         extraction_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label='Extraction Contours', menu=extraction_menu)
-        extraction_menu.add_command(label='Gradient', command=self.function)
-        extraction_menu.add_command(label='Sobel', command=self.function)
-        extraction_menu.add_command(label='Robert', command=self.function)
-        extraction_menu.add_command(label='Laplacien', command=self.function)
+        extraction_menu.add_command(label='Gradient', command=self.gradient)
+        extraction_menu.add_command(label='Sobel', command=self.sobel)
+        extraction_menu.add_command(label='Robert', command=self.robert)
+        extraction_menu.add_command(label='Laplacien', command=self.laplacien)
 
         #SOUS MENU MORPHOLOGIE
         morphologie_menu = tk.Menu(menuBar, tearoff=0)
@@ -77,9 +78,9 @@ class VO_MainApplication:
         #SOUS MENU SEGMENTATION
         segmentation_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label='Segmentation', menu=segmentation_menu)
-        segmentation_menu.add_command(label='Croissance de regions D', command=self.function)
+        segmentation_menu.add_command(label='Croissance de regions D', command=self.croissance)
         segmentation_menu.add_command(label='Partition de regions D', command=self.function)
-        segmentation_menu.add_command(label='k_means', command=self.function)
+        segmentation_menu.add_command(label='k_means', command=self.kmeans)
   
         #SOUS MENU POINTS D INTERET
         ptsInteret_menu = tk.Menu(menuBar, tearoff=0)
@@ -91,7 +92,7 @@ class VO_MainApplication:
         #SOUS MENU POINTS D INTERET
         compression_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label="Compression", menu=compression_menu)
-        compression_menu.add_command(label='xx', command=self.function)
+        compression_menu.add_command(label='compression', command=self.compression)
         compression_menu.add_command(label='xx', command=self.function)
         compression_menu.add_command(label='xx', command=self.function)
 
@@ -258,6 +259,80 @@ class VO_MainApplication:
             M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
             self.modified_image = cv2.warpAffine(self.original_image, M, (cols, rows))
             self.display_modified_image()
+############################## RAHMA ##########################################
+    def sobel(self):
+        if self.original_image is not None:
+            sobel_x = cv2.Sobel(self.original_image, cv2.CV_64F, 1, 0, ksize=3)
+            sobel_y = cv2.Sobel(self.original_image, cv2.CV_64F, 0, 1, ksize=3)
+            sx =cv2.convertScaleAbs(sobel_x)
+            sy =cv2.convertScaleAbs(sobel_y)
+            self.modified_image = cv2.addWeighted(sx, 0.5, sy, 0.5, 0)
+            self.display_modified_image()
+
+    def gradient(self):
+        if self.original_image is not None:
+            dx = cv2.Sobel(self.original_image, cv2.CV_64F, 1, 0 ,ksize=3) # Calculer le gradient en x
+            dy = cv2.Sobel(self.original_image, cv2.CV_64F, 0, 1 ,ksize=3) # Calculer le gradient en y
+            magnitude = np.sqrt(dx**2 + dy**2)
+            magnitude = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
+            magnitude = np.uint8(magnitude)
+            _, thresholded = cv2.threshold(magnitude, 50, 255, cv2.THRESH_BINARY)
+            self.modified_image =thresholded
+            self.display_modified_image()
+
+    def robert(self):
+        if self.original_image is not None:
+            roberts_x = np.array([[1, 0], [0, -1]], dtype=np.float32)
+            roberts_y = np.array([[0, 1], [-1, 0]], dtype=np.float32)
+            gradient_x = cv2.filter2D(self.original_image, cv2.CV_32F, roberts_x)
+            gradient_y = cv2.filter2D(self.original_image, cv2.CV_32F, roberts_y)
+
+            # Calculez le module du gradient
+            magnitude = cv2.magnitude(gradient_x, gradient_y)
+            # Vous pouvez ajuster la valeur de seuil en fonction de vos besoins
+            seuil = 50
+            _, seuil_img = cv2.threshold(magnitude, seuil, 255, cv2.THRESH_BINARY)
+            self.modified_image =seuil_img
+            self.display_modified_image()
+
+    def laplacien(self):
+        if self.original_image is not None:
+            # Appliquez l'opérateur de Laplacien pour détecter les contours
+            laplacian = cv2.Laplacian(self.original_image, cv2.CV_64F)
+
+            # Convertissez l'image du Laplacien en image en entiers signés en utilisant la méthode absolute()
+            laplacian = cv2.convertScaleAbs(laplacian)
+
+            # Seuil de l'image du Laplacien
+            seuil = 30
+            _, seuil_img = cv2.threshold(laplacian, seuil, 255, cv2.THRESH_BINARY)
+            self.modified_image =seuil_img
+            self.display_modified_image()
+
+    def croissance(self):
+        if self.original_image is not None:
+           return self.original_image
+    
+    def kmeans(self):
+        if self.original_image is not None:
+            # Redimensionner l'image (facultatif)
+            image = cv2.resize(self.original_image, (800, 600))
+
+            # Convertir l'image en une matrice de pixels
+            pixels = image.reshape(-1, 3)
+
+            # Effectuer la segmentation K-means
+            kmeans = KMeans(n_clusters=8)  # Choisir le nombre de clusters souhaité
+            kmeans.fit(pixels)
+            labels = kmeans.labels_
+            self.modified_image = kmeans.cluster_centers_[labels].reshape(image.shape)
+            self.display_modified_image()
+    
+    def compression(self):
+        if self.original_image is not None:
+            self.modified_image='image_compressed.png'
+            cv2.imwrite(self.modified_image, self.original_image, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            self.display_modified_image()
 
 
 ################################################################################
@@ -279,6 +354,18 @@ class VO_MainApplication:
         self.canvas_modified_image.create_image(0, 0, anchor=tk.NW, image=tk_image)
         self.canvas_modified_image.image = tk_image
 ################################################################################3
+
+def similarite(pixel1, pixel2):
+    # Calculer la différence entre les valeurs des canaux BGR pour les deux pixels
+    diff_b = abs(int(pixel1[0]) - int(pixel2[0]))
+    diff_g = abs(int(pixel1[1]) - int(pixel2[1]))
+    diff_r = abs(int(pixel1[2]) - int(pixel2[2]))
+    # Calculer la distance euclidienne entre les valeurs des canaux BGR pour les deux pixels
+    distance = np.sqrt(diff_b**2 + diff_g**2 + diff_r**2)
+    return distance
+
+
+
 
 root = tk.Tk()
 app = VO_MainApplication(root)
