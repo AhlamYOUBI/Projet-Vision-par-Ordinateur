@@ -1,12 +1,13 @@
 
 import tkinter as tk
 from tkinter import filedialog, Canvas, simpledialog
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageFilter
 import PIL
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
+from tkinter import messagebox
 #from tkinter import*
 
 class VO_MainApplication:
@@ -21,6 +22,7 @@ class VO_MainApplication:
         self.image = None
         self.original_image = None
         self.modified_image = None
+        self.resized_img = None
 
         #Creer un objet de menu et l'ajouter a fenetre
         menuBar = tk.Menu(self.master)
@@ -47,16 +49,16 @@ class VO_MainApplication:
         #SOUS MENU BINARISATION
         binarisation_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label='Binarisation', menu=binarisation_menu)
-        binarisation_menu.add_command(label='Seuillage manuel', command=self.function)
-        binarisation_menu.add_command(label='OTSU', command=self.function)
-        binarisation_menu.add_command(label='Autres', command=self.function)
+        binarisation_menu.add_command(label='Seuillage manuel', command=self.binarize_global)
+        binarisation_menu.add_command(label='OTSU', command=self.binarize_otsu)
+        binarisation_menu.add_command(label='Moyenne pondérée', command=self.binarize_weighted_mean)
         
         #SOUS MENU FILTRAGE
         filtrage_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label='Filtrage', menu=filtrage_menu)
-        filtrage_menu.add_command(label='Gaussien', command=self.function)
-        filtrage_menu.add_command(label='Moyenneur', command=self.function)
-        filtrage_menu.add_command(label='Median', command=self.function)
+        filtrage_menu.add_command(label='Gaussien', command=self.filter_gaussian)
+        filtrage_menu.add_command(label='Moyenneur', command=self.filter_moyenneur)
+        filtrage_menu.add_command(label='Median', command=self.filter_median)
 
         #SOUS MENU EXTRACTION CONTOURS
         extraction_menu = tk.Menu(menuBar, tearoff=0)
@@ -335,25 +337,93 @@ class VO_MainApplication:
             self.display_modified_image()
 
 
-################################################################################
+################################### AHLAM ##########################################
     def redimensionner(self):
         if self.original_image is not None:
             width = simpledialog.askinteger("Redimensionnement", "Entrez la nouvelle largeur : ", parent=self.master)
             height = simpledialog.askinteger("Redimensionnement", "Entrez la nouvelle hauteur : ", parent=self.master)
 
-            self.resized_img = self.original_image.resize((width, height))
+            # message = "Largeur : {} px\nHauteur : {} px".format(width, height)
+            # tk.messagebox.showinfo("Dimensions saisies", message)
+
+            img = Image.fromarray(self.original_image)
+            self.resized_img = img.resize((width, height))
+            print("New image dimensions:", self.resized_img.size)
             self.display_resized_image()
 
     def display_resized_image(self):
-        # Créer un widget Canvas pour afficher l'image redimensionnée
-        self.canvas_modified_image = tk.Canvas(self.modified_image, width=self.resized_img.width, height=self.resized_img.height)
-        self.canvas_modified_image.pack()
+        # Supprimer l'image actuelle du widget canvas
+        self.canvas_modified_image.delete("all")
 
-        # Convertir l'image en format Tkinter et l'afficher dans le widget Canvas
-        tk_image = ImageTk.PhotoImage(self.resized_img)
-        self.canvas_modified_image.create_image(0, 0, anchor=tk.NW, image=tk_image)
-        self.canvas_modified_image.image = tk_image
-################################################################################3
+        # Obtenir les dimensions de l'image redimensionnée
+        if self.resized_img is not None:
+            width, height = self.resized_img.size
+
+            # Créer un widget Canvas pour afficher l'image redimensionnée
+            self.canvas_modified_image = tk.Canvas(self.modified_image, width=width, height=height)
+            self.canvas_modified_image.pack()
+
+            # Convertir l'image en format Tkinter et l'afficher dans le widget Canvas
+            tk_image = ImageTk.PhotoImage(self.resized_img)
+            self.canvas_modified_image.create_image(0, 0, anchor=tk.NW, image=tk_image)
+            self.canvas_modified_image.image = tk_image
+
+
+    def filter_gaussian(self):
+        if self.original_image is not None :
+            # Obtenir la valeur de l'écart type à partir d'une boîte de dialogue
+            sigma = simpledialog.askfloat("Filtre Gaussien", "Entrez la valeur de l'écart type (entre 0.5 et 5.0) :", parent=self.master)
+            # Appliquer le filtre Gaussien à l'image
+            self.modified_image = cv2.GaussianBlur(self.original_image, (0, 0), sigmaX=sigma, sigmaY=sigma)
+            self.display_modified_image()
+
+
+    def filter_moyenneur(self):
+        if self.original_image is not None:
+            # Obtenir la taille du filtre à partir d'une boîte de dialogue
+            filter_size = simpledialog.askinteger("Filtre Moyenneur", "Entrez la taille du filtre (nombre impair >3) :", parent=self.master)
+            # Appliquer le filtre Moyenneur à l'image
+            self.modified_image = cv2.blur(self.original_image, (filter_size, filter_size))
+            self.display_modified_image()
+
+    def filter_median(self):
+        if self.original_image is not None:
+            # Obtenir la taille du filtre à partir d'une boîte de dialogue
+            filter_size = simpledialog.askinteger("Filtre Médian", "Entrez la taille du filtre (nombre impair) :", parent=self.master)
+            # Appliquer le filtre Médian à l'image
+            self.modified_image = cv2.medianBlur(self.original_image, filter_size)
+            self.display_modified_image()
+
+
+    def binarize_global(self):
+        if self.original_image is not None:
+            threshold = simpledialog.askinteger("Seuillage manuel", "Entrez la valeur de seuil (entre 0 et 255) :", parent=self.master)
+            # gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+            gray_image = self.original_image
+            _, binary_image = cv2.threshold(gray_image, threshold, 255, cv2.THRESH_BINARY)
+            self.modified_image = binary_image
+            self.display_modified_image()
+
+
+
+    def binarize_otsu(self):
+         if self.original_image is not None:
+            # gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+            gray_image = self.original_image
+            _, binary_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            self.modified_image = binary_image
+            self.display_modified_image()
+
+
+    def binarize_weighted_mean(self):
+        if self.original_image is not None:
+            gray_image = self.original_image
+            # gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
+            threshold_value = cv2.mean(gray_image)[0]
+            ret, self.modified_image = cv2.threshold(gray_image, threshold_value, 255, cv2.THRESH_BINARY)
+            self.display_modified_image()
+
+
 
 def similarite(pixel1, pixel2):
     # Calculer la différence entre les valeurs des canaux BGR pour les deux pixels
