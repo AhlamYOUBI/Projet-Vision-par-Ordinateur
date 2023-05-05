@@ -1,6 +1,6 @@
 
 import tkinter as tk
-from tkinter import filedialog, Canvas, simpledialog
+from tkinter import filedialog, Canvas, simpledialog , ttk
 from PIL import Image, ImageTk, ImageFilter
 import PIL
 import cv2
@@ -41,7 +41,7 @@ class VO_MainApplication:
         transformation_menu.add_command(label='Negative', command=self.negative)
         transformation_menu.add_command(label='Rotation', command=self.rotation)
         transformation_menu.add_command(label='Redimension', command=self.redimensionner)
-        transformation_menu.add_command(label='Rectangle', command=self.function)
+        transformation_menu.add_command(label='Rectangle', command=self.selection_image)
         transformation_menu.add_command(label='Histogramme', command=self.histogramme)
         transformation_menu.add_command(label='Etirement', command=self.etirement)
         transformation_menu.add_command(label='Egalisation', command=self.egalisation)
@@ -82,12 +82,12 @@ class VO_MainApplication:
         menuBar.add_cascade(label='Segmentation', menu=segmentation_menu)
         segmentation_menu.add_command(label='Croissance de regions D', command=self.croissance)
         segmentation_menu.add_command(label='Partition de regions D', command=self.function)
-        segmentation_menu.add_command(label='k_means', command=self.kmeans)
+        segmentation_menu.add_command(label='k_means', command=self.segment_kmeans)
   
         #SOUS MENU POINTS D INTERET
         ptsInteret_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label="Point d'interet", menu=ptsInteret_menu)
-        ptsInteret_menu.add_command(label='xx', command=self.function)
+        ptsInteret_menu.add_command(label='hough', command=self.hough)
         ptsInteret_menu.add_command(label='xx', command=self.function)
         ptsInteret_menu.add_command(label='xx', command=self.function)
   
@@ -104,29 +104,29 @@ class VO_MainApplication:
         self.button_open_image = tk.Button(master, text="Ouvrir une image", command=self.open_image)
         self.button_open_image.pack()
 
+        # Création du bouton pour reinistialiser une image
+        self.button_reset_image = tk.Button(master, text="Réinitialiser une image", command=self.reset_image)
+        self.button_reset_image.pack()
+
         # Création des deux zones d'affichage pour les images
         self.canvas_original_image = tk.Canvas(master, width=400, height=400)
         self.canvas_original_image.pack(side=tk.LEFT, padx=10, pady=10)
 
         self.canvas_modified_image = tk.Canvas(master, width=400, height=400)
         self.canvas_modified_image.pack(side=tk.LEFT, padx=10, pady=10)
-         
 
-
+        #Affichage 
 
 
         # Créer un canevas pour afficher l'image
         #self.canvas = Canvas(self.master)
 
 
-
-        
-
     # Methode pour ouvrir une image
     def open_image(self):
         imgPath = filedialog.askopenfilename()
         if imgPath :
-            self.original_image = cv2.imread(imgPath, cv2.IMREAD_GRAYSCALE)
+            self.original_image = cv2.imread(imgPath)
             self.display_original_image()
         
 
@@ -335,6 +335,58 @@ class VO_MainApplication:
             self.modified_image='image_compressed.png'
             cv2.imwrite(self.modified_image, self.original_image, [cv2.IMWRITE_JPEG_QUALITY, 50])
             self.display_modified_image()
+
+    def segment_kmeans(self):
+        k = simpledialog.askfloat("K-msean", "Entrez le nombre de clusters : ", parent=self.master)
+        if k is None:
+            return
+        img_array = np.array(self.original_image)
+    
+        kmeans = KMeans(n_clusters=k)
+        kmeans.fit(img_array.reshape(-1, 1))
+        labels = kmeans.labels_
+
+        self.modified_image = Image.fromarray(np.uint8(labels.reshape(img_array.shape))*255//k)
+        self.display_modified_image()
+
+    def reset_image(self):
+        self.modified_image[:] = self.original_image[:]
+        self.display_modified_image()
+    
+
+    def selection_image(self):
+        if self.original_image.size > 0:
+            r1 = messagebox.showinfo("Sélection", 'Veuillez sélectionner une région et cliquer su le bouton "espace" our "entrer" pour voir la région sélectionnée')
+            if r1 == "ok":
+                # Sélectionner la région d'intérêt
+                roi = cv2.selectROI(self.original_image)
+                # Extraire la région d'intérêt
+                self.modified_image = self.original_image[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
+                # Afficher la région d'intérêt
+                self.display_modified_image()
+        else:
+            messagebox.showerror("Erreur", "Veuillez choisir une image!")
+
+    
+    def hough(self):
+        img = np.array(self.original_image)
+        # Convertir l'image en niveaux de gris
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Appliquer un filtre de détection de contours
+        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
+
+        # Détecter les cercles avec la méthode de Hough
+        circles = cv2.HoughCircles(edges, cv2.HOUGH_GRADIENT, dp=1, minDist=20, param1=50, param2=30, minRadius=0, maxRadius=0)
+
+        # Dessiner les cercles détectés sur l'image d'entrée
+        if circles is not None:
+            circles = np.round(circles[0, :]).astype("int")
+            for (x, y, r) in circles:
+                cv2.circle(img, (x, y), r, (0, 255, 0), 2)
+
+        self.modified_image = Image.fromarray(img)
+        self.display_modified_image()
 
 
 ################################### AHLAM ##########################################
