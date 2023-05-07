@@ -66,7 +66,7 @@ class VO_MainApplication:
         menuBar.add_cascade(label='Extraction Contours', menu=extraction_menu)
         extraction_menu.add_command(label='Gradient', command=self.gradient)
         extraction_menu.add_command(label='Sobel', command=self.sobel)
-        extraction_menu.add_command(label='Robert', command=self.robert)
+        extraction_menu.add_command(label='Robert', command=self.robert)   
         extraction_menu.add_command(label='Laplacien', command=self.laplacien)
 
         #SOUS MENU MORPHOLOGIE
@@ -76,6 +76,7 @@ class VO_MainApplication:
         morphologie_menu.add_command(label='Dilatation', command=self.dilatation)
         morphologie_menu.add_command(label='Ouverture', command=self.ouverture)
         morphologie_menu.add_command(label='Fermeture', command=self.fermeture)
+        morphologie_menu.add_command(label='Filtrage Morphologique', command=self.filtrage_morphologique)
 
         #SOUS MENU SEGMENTATION
         segmentation_menu = tk.Menu(menuBar, tearoff=0)
@@ -87,8 +88,9 @@ class VO_MainApplication:
         #SOUS MENU POINTS D INTERET
         ptsInteret_menu = tk.Menu(menuBar, tearoff=0)
         menuBar.add_cascade(label="Point d'interet", menu=ptsInteret_menu)
-        ptsInteret_menu.add_command(label='hough_lines', command=self.hough_lines)
+        ptsInteret_menu.add_command(label='hough_lines', command=self.hough_lines) 
         ptsInteret_menu.add_command(label='hough_circles', command=self.hough_circles)
+        ptsInteret_menu.add_command(label='shi_tomasi', command=self.shi_tomasi)
   
         #SOUS MENU POINTS D INTERET
         compression_menu = tk.Menu(menuBar, tearoff=0)
@@ -327,6 +329,32 @@ class VO_MainApplication:
             self.canvas_modified_image.image = photo
 
 
+    def robert(self):
+        if self.original_image is not None:
+            gray = cv2.cvtColor(np.array(self.original_image), cv2.COLOR_RGB2GRAY)
+            roberts_x = np.array([[1, 0], [0, -1]], dtype=np.float32)
+            roberts_y = np.array([[0, 1], [-1, 0]], dtype=np.float32)
+            gradient_x = cv2.filter2D(gray, cv2.CV_32F, roberts_x)
+            gradient_y = cv2.filter2D(gray, cv2.CV_32F, roberts_y)
+
+            # Calculez le module du gradient
+            magnitude = cv2.magnitude(gradient_x, gradient_y)
+            seuil = 50
+            _, seuil_img = cv2.threshold(magnitude, seuil, 255, cv2.THRESH_BINARY)
+            self.modified_image =seuil_img
+            self.display_robert_image()
+
+    def display_robert_image(self):
+        if self.modified_image is not None:
+            # Convertir le tableau numpy en uint8 avant de le convertir en image PIL
+            image_pil = Image.fromarray(cv2.cvtColor(self.modified_image.astype('uint8'), cv2.COLOR_BGR2RGB))
+            self.image_tk_modified = ImageTk.PhotoImage(image_pil)
+            photo = self.image_tk_modified
+            self.canvas_modified_image.delete("all")
+            self.canvas_modified_image.create_image(0, 0, anchor=tk.NW, image=photo)
+            self.canvas_modified_image.image = photo
+
+
     def laplacien(self):
         if self.original_image is not None:
             gray = cv2.cvtColor(np.array(self.original_image), cv2.COLOR_RGB2GRAY)
@@ -335,6 +363,14 @@ class VO_MainApplication:
             seuil = 30
             _, seuil_img = cv2.threshold(laplacian, seuil, 255, cv2.THRESH_BINARY)
             self.modified_image = seuil_img
+            self.display_modified_image()
+
+    def filtrage_morphologique(self):
+        if self.original_image is not None:
+            gray = cv2.cvtColor(np.array(self.original_image), cv2.COLOR_RGB2GRAY)
+            kernel = np.ones((3,3),np.uint8)
+            morph = cv2.morphologyEx(gray,cv2.MORPH_OPEN, kernel)
+            self.modified_image = morph
             self.display_modified_image()
 
 
@@ -410,8 +446,9 @@ class VO_MainApplication:
         self.modified_image = None
         self.resized_img = None
         if self.original_image.size > 0:
-            r1 = messagebox.showinfo("Sélection", "Veuillez sélectionner une région et cliquer su le bouton 'espace' our 'entrer'"
-                                         "pour voir la région sélectionnée")
+
+            r1 = messagebox.showinfo("Sélection", 'Veuillez sélectionner une région et cliquer sur le bouton "espace" our "entrer" pour voir la région sélectionnée')
+
             if r1 == "ok":
                 roi = cv2.selectROI(self.original_image)
                 self.modified_image = self.original_image[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
@@ -457,6 +494,17 @@ class VO_MainApplication:
             self.modified_image = self.original_image
             self.display_modified_image()
 
+
+    def shi_tomasi(self):
+        if self.original_image is not None:
+            gray = cv2.cvtColor(self.original_image , cv2.COLOR_BGR2GRAY)
+            corners = cv2.goodFeaturesToTrack(gray, maxCorners=100, qualityLevel=0.01, minDistance=10)
+            corners = np.int0(corners)
+            for corner in corners:
+                x,y = corner.ravel()
+                cv2.circle(self.original_image,(x,y),3,(0,0,255),-1)
+            self.image_traitee = self.original_image
+            self.display_modified_image()
 
     def redimensionner(self):
         self.modified_image = None
