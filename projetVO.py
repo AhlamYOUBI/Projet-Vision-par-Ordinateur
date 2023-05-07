@@ -145,9 +145,13 @@ class VO_MainApplication:
 
     def save_image(self):
         imgPath = filedialog.asksaveasfilename(initialdir="/", title="Select file",
-                                          filetypes=(("jpeg files", "*.jpg"), ("all files", "*.*")))
-        self.image.save(imgPath)
-        print("L'image a été enregistrée dans :", imgPath)
+                                        filetypes=(("jpeg files", "*.jpg"), ("all files", "*.*")))
+        if imgPath:
+            modified_image_array = np.array(self.modified_image, dtype=np.uint8)
+            modified_image_pil = Image.fromarray(modified_image_array)
+            modified_image_pil.save(imgPath)
+            print("L'image a été enregistrée dans :", imgPath)
+
 
 
     def erosion(self):
@@ -201,23 +205,36 @@ class VO_MainApplication:
     def etirement(self, lower_pct=5, upper_pct=95):
         if self.original_image is not None:
             img = np.array(self.original_image)
-            if len(img.shape) == 3:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            p_lower, p_upper = np.percentile(img, (lower_pct, upper_pct))
-            img_etiree = (img - p_lower) * (255 / (p_upper - p_lower))
-            img_etiree = np.clip(img_etiree, 0, 255).astype(np.uint8)
-            self.modified_image = img_etiree
+            if len(img.shape) == 3: # pour les images couleur
+                img_yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+                img_yuv[:,:,0] = cv2.equalizeHist(img_yuv[:,:,0])
+                img = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2BGR)
+            else: # pour les images en niveaux de gris
+                p_lower, p_upper = np.percentile(img, (lower_pct, upper_pct))
+                img_etiree = (img - p_lower) * (255 / (p_upper - p_lower))
+                img_etiree = np.clip(img_etiree, 0, 255).astype(np.uint8)
+                img = img_etiree
+            
+            self.modified_image = img
             self.display_modified_image()
+
 
 
     def egalisation(self):
         if self.original_image is not None:
             img = np.array(self.original_image)
-            if len(img.shape) == 3:
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            img_egualise = cv2.equalizeHist(img)
+            if len(img.shape) == 3:  # Si l'image est en couleur
+                b, g, r = cv2.split(img)
 
-            self.modified_image = img_egualise
+                b_eq = cv2.equalizeHist(b)
+                g_eq = cv2.equalizeHist(g)
+                r_eq = cv2.equalizeHist(r)
+
+                img_equalized = cv2.merge((b_eq, g_eq, r_eq))
+            else:  # Si l'image est en niveaux de gris
+                img_equalized = cv2.equalizeHist(img)
+
+            self.modified_image = img_equalized
             self.display_modified_image()
 
 
@@ -250,7 +267,8 @@ class VO_MainApplication:
 
     def rotation(self):
         if self.original_image is not None:
-            angle = simpledialog.askfloat("Rotation", "Entrez l'angle de rotation en degrés : ", parent=self.master)
+            angle = simpledialog.askfloat("Rotation", "Entrez l'angle de rotation en degrés : ",
+                                           parent=self.master)
             if angle is None:
                 return
             rows, cols = self.original_image.shape[:2]
@@ -382,7 +400,8 @@ class VO_MainApplication:
         self.modified_image = None
         self.resized_img = None
         if self.original_image.size > 0:
-            r1 = messagebox.showinfo("Sélection", 'Veuillez sélectionner une région et cliquer su le bouton "espace" our "entrer" pour voir la région sélectionnée')
+            r1 = messagebox.showinfo("Sélection", "Veuillez sélectionner une région et cliquer su le bouton 'espace' our 'entrer'"
+                                         "pour voir la région sélectionnée")
             if r1 == "ok":
                 roi = cv2.selectROI(self.original_image)
                 self.modified_image = self.original_image[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
@@ -457,28 +476,32 @@ class VO_MainApplication:
 
     def filter_gaussian(self):
         if self.original_image is not None :
-            sigma = simpledialog.askfloat("Filtre Gaussien", "Entrez la valeur de l'écart type (entre 0.5 et 5.0) :", parent=self.master)
+            sigma = simpledialog.askfloat("Filtre Gaussien", "Entrez la valeur de l'écart type (entre 0.5 et 5.0) :"
+                                          , parent=self.master)
             self.modified_image = cv2.GaussianBlur(self.original_image, (0, 0), sigmaX=sigma, sigmaY=sigma)
             self.display_modified_image()
 
 
     def filter_moyenneur(self):
         if self.original_image is not None:
-            filter_size = simpledialog.askinteger("Filtre Moyenneur", "Entrez la taille du filtre (nombre impair >3) :", parent=self.master)
+            filter_size = simpledialog.askinteger("Filtre Moyenneur", "Entrez la taille du filtre" 
+                                                  "(nombre impair >3) :", parent=self.master)
             self.modified_image = cv2.blur(self.original_image, (filter_size, filter_size))
             self.display_modified_image()
 
 
     def filter_median(self):
         if self.original_image is not None:
-            filter_size = simpledialog.askinteger("Filtre Médian", "Entrez la taille du filtre (nombre impair) :", parent=self.master)
+            filter_size = simpledialog.askinteger("Filtre Médian", "Entrez la taille du filtre (nombre impair) :"
+                                                  , parent=self.master)
             self.modified_image = cv2.medianBlur(self.original_image, filter_size)
             self.display_modified_image()
 
 
     def binarize_global(self):
         if self.original_image is not None:
-            threshold = simpledialog.askinteger("Seuillage manuel", "Entrez la valeur de seuil (entre 0 et 255) :", parent=self.master)
+            threshold = simpledialog.askinteger("Seuillage manuel", "Entrez la valeur de seuil (entre 0 et 255) :"
+                                                , parent=self.master)
             gray_image = cv2.cvtColor(self.original_image, cv2.COLOR_BGR2GRAY)
             _, binary_image = cv2.threshold(gray_image, threshold, 255, cv2.THRESH_BINARY)
             self.modified_image = binary_image
