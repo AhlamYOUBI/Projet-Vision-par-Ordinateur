@@ -314,7 +314,17 @@ class VO_MainApplication:
             seuil = 50
             _, seuil_img = cv2.threshold(magnitude, seuil, 255, cv2.THRESH_BINARY)
             self.modified_image =seuil_img
-            self.display_modified_image()
+            self.display_robert_image()
+
+    def display_robert_image(self):
+        if self.modified_image is not None:
+            # Convertir le tableau numpy en uint8 avant de le convertir en image PIL
+            image_pil = Image.fromarray(cv2.cvtColor(self.modified_image.astype('uint8'), cv2.COLOR_BGR2RGB))
+            self.image_tk_modified = ImageTk.PhotoImage(image_pil)
+            photo = self.image_tk_modified
+            self.canvas_modified_image.delete("all")
+            self.canvas_modified_image.create_image(0, 0, anchor=tk.NW, image=photo)
+            self.canvas_modified_image.image = photo
 
 
     def laplacien(self):
